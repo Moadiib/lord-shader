@@ -1,4 +1,4 @@
-# shader-webgl
+# lord-shader
 
 A Vue 3 + WebGL shader background system. Authors shaders as self-contained GLSL fragment shader entries in a central registry (`src/lib/shaders.js`). Each shader drives a live canvas rendered by `ShaderBackground.vue`, and is configured through a data-driven control panel (`ShaderPicker.vue`) without any per-shader UI code.
 
@@ -21,6 +21,7 @@ A Vue 3 + WebGL shader background system. Authors shaders as self-contained GLSL
    - [Ripple](#ripple-ripple)
    - [FBM Noise](#fbm-noise-fbmnoise)
    - [Silk](#silk-silk)
+   - [Organic Lines](#organic-lines-organiclines)
    - [Fluid](#fluid-fluid)
 9. [How to Add a New Shader](#how-to-add-a-new-shader)
 10. [Config JSON Format](#config-json-format)
@@ -374,6 +375,35 @@ The standard vertex shader used by all effects. Takes `attribute vec2 a_pos` (th
 7. Reinhard tone-map + gamma lift.
 
 **Feel:** Flowing liquid-silk fabric. The warp type changes the drape pattern from smooth waves to chevrons to brain-like cortex folds. The weave overlay adds micro-surface fibre detail.
+
+---
+
+### Organic Lines (`organicLines`)
+
+**Technique:** Flow-field line renderer — two layers of domain-warped gradient noise build a fluid line pattern, extracted with a proximity power function and mapped through a 4-stop colour gradient.
+
+**Key uniforms:** `u_lineDensity`, `u_lineProximity`, `u_glowSharp`, `u_glowSpread`, `u_scale`, `u_amplitude`, `u_speed`, `u_bgWeight`, `u_baseWeight`, `u_accentWeight`, `u_bgColor`, `u_baseColor`, `u_accentColor`, `u_highlightColor`.
+
+**Algorithm:**
+1. Aspect-correct and centre UV, scale by `u_scale`.
+2. **Mouse warp** (when `u_mouseEnabled`): Gaussian repulsion from cursor, radius controlled by `u_mouseRadius` and strength by `u_mouseStr`.
+3. **Layer 1 — base flow field**: `noise2D` sampled at `uv · 2.5 ± (t·0.2, t·0.15)` to produce a `flowOffset` vector, scaled by `u_amplitude`.
+4. **Layer 2 — domain warp**: `warpedUV = uv + flowOffset`. Two noise samples at different frequencies and time phases are blended 60/40 to get `fluidPattern`.
+5. **Line extraction**:  
+   `baseWaves = sin(fluidPattern · u_lineDensity + t)`  
+   `lineField = sign(w) · |w|^(1/lineProximity)` — proximity > 1 separates lines (thinner), < 1 packs them (thicker).
+6. **Masking** from `fieldVal = |lineField|`:  
+   - `crispVein = smoothstep(u_glowSharp, 0, fieldVal)` — hard line core  
+   - `lineGlow = exp(−fieldVal · 10 / u_glowSpread)` — soft halo
+7. **4-stop colour gradient** (progressive mix weighted by group controls):  
+   - `col = mix(u_baseColor, u_bgColor, lineGlow · u_bgWeight)`  
+   - `col = mix(col, u_accentColor, lineGlow · u_baseWeight)`  
+   - `col = mix(col, u_highlightColor, crispVein · u_accentWeight)`
+8. Reinhard tone-map: `col / (col + 0.4)`.
+
+**Presets:** Electric Core (few bold lines), Ghostly Whispers (many faint lines), Standard Fluid (defaults), **Lava** (dense lines, near-black base, deep red → orange-amber palette).
+
+**Feel:** Flowing tendrils, organic veins, plasma streams. Line density controls how many parallel lines are visible. Proximity separates or packs them without changing their frequency. The Lava preset produces glowing molten fissures on a near-black background.
 
 ---
 
